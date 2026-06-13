@@ -15,7 +15,7 @@ from edit_palette_widget import EditPaletteWidget
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Xiangqi GUI")
+        self.setWindowTitle("YY Xiangqi")
         self.resize(900, 700)
         
         self.board_logic = Board()

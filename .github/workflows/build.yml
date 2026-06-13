@@ -27,22 +27,22 @@ jobs:
         
     - name: Build with PyInstaller
       run: |
-        pyinstaller --noconfirm --onedir --windowed --name "XiangqiGUI" main.py
+        pyinstaller --noconfirm --onedir --windowed --name "YY-Xiangqi" main.py
         
     - name: Create Release Archive
       run: |
-        Compress-Archive -Path dist/XiangqiGUI/* -DestinationPath XiangqiGUI-Windows.zip
+        Compress-Archive -Path dist/YY-Xiangqi/* -DestinationPath YY-Xiangqi-Windows.zip
         
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: XiangqiGUI-Windows
-        path: XiangqiGUI-Windows.zip
+        name: YY-Xiangqi-Windows
+        path: YY-Xiangqi-Windows.zip
 
     - name: Upload Release Asset
       if: github.event_name == 'release'
       uses: softprops/action-gh-release@v1
       with:
-        files: XiangqiGUI-Windows.zip
+        files: YY-Xiangqi-Windows.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
