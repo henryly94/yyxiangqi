@@ -43,9 +43,31 @@ class BoardWidget(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
         # Draw background
-        painter.fillRect(self.rect(), QColor("#f4e4c3")) # Light woody/cream color
+        painter.fillRect(self.rect(), QColor("#e8c792")) # Richer wood color
+        
+        # Draw board border frame
+        painter.setPen(QPen(QColor("#4a3621"), 3))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRect(int(self.margin_x - 10), int(self.margin_y - 10), 
+                         int(8 * self.square_size + 20), int(9 * self.square_size + 20))
         
         self.draw_grid(painter)
+        
+        # Draw last move highlight
+        if self.board_logic.current_move_index >= 0 and not self.edit_mode:
+            last_move_uci = self.board_logic.move_history[self.board_logic.current_move_index]['uci']
+            r1, c1 = self.board_logic.uci_to_pos(last_move_uci[:2])
+            r2, c2 = self.board_logic.uci_to_pos(last_move_uci[2:4]) # just in case of promotion string
+            
+            for r, c in [(r1, c1), (r2, c2)]:
+                visual_r = 9 - r if self.is_flipped else r
+                visual_c = 8 - c if self.is_flipped else c
+                hx = self.margin_x + visual_c * self.square_size
+                hy = self.margin_y + visual_r * self.square_size
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(QBrush(QColor(255, 215, 0, 150))) # Semi-transparent gold
+                painter.drawRect(QRectF(hx - self.square_size/2, hy - self.square_size/2, self.square_size, self.square_size))
+        
         self.draw_pieces(painter)
         
         # Draw selection highlight and legal moves ONLY if not in edit mode
@@ -113,14 +135,19 @@ class BoardWidget(QWidget):
                     
                     is_red = self.board_logic.is_red(piece)
                     
+                    # Drop shadow
+                    painter.setPen(Qt.PenStyle.NoPen)
+                    painter.setBrush(QBrush(QColor(0, 0, 0, 70)))
+                    radius = self.square_size // 2 - 2
+                    painter.drawEllipse(QPointF(x + 2, y + 3), radius, radius)
+                    
                     # Draw piece background
                     painter.setPen(QPen(QColor(0, 0, 0), 1))
-                    painter.setBrush(QBrush(QColor(255, 245, 230)))
-                    radius = self.square_size // 2 - 2
+                    painter.setBrush(QBrush(QColor(255, 248, 235)))
                     painter.drawEllipse(QPointF(x, y), radius, radius)
                     
                     # Draw inner ring
-                    painter.setPen(QPen(QColor(200, 180, 150), 1))
+                    painter.setPen(QPen(QColor(210, 190, 160), 1))
                     painter.drawEllipse(QPointF(x, y), radius - 3, radius - 3)
                     
                     # Text

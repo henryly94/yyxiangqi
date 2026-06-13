@@ -27,7 +27,7 @@ jobs:
         
     - name: Build with PyInstaller
       run: |
-        pyinstaller --noconfirm --onedir --windowed --name "YY-Xiangqi" main.py
+        pyinstaller --noconfirm --onedir --windowed --icon=icon.ico --name "YY-Xiangqi" main.py
         
     - name: Create Release Archive
       run: |

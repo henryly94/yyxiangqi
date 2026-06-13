@@ -1,11 +1,12 @@
 import sys
 import os
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                             QHBoxLayout, QPushButton, QTextEdit, QListWidget, 
-                             QFileDialog, QLabel, QSplitter, QListWidgetItem,
-                             QInputDialog, QMessageBox, QComboBox)
-from PyQt6.QtGui import QColor
-from PyQt6.QtCore import Qt
+                             QHBoxLayout, QPushButton, QTextEdit, 
+                             QFileDialog, QLabel, QSplitter,
+                             QInputDialog, QMessageBox, QComboBox,
+                             QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView)
+from PyQt6.QtGui import QColor, QIcon
+from PyQt6.QtCore import Qt, QSettings
 
 from xiangqi_logic import Board
 from board_widget import BoardWidget
@@ -16,8 +17,50 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("YY Xiangqi")
+        self.setWindowIcon(QIcon("icon.png"))
         self.resize(900, 700)
         
+        self.settings = QSettings("YYTeam", "YYXiangqi")
+        
+        self.setStyleSheet("""
+            QMainWindow { background-color: #f0f2f5; }
+            QPushButton { 
+                background-color: #ffffff; 
+                border: 1px solid #d1d5db; 
+                border-radius: 4px; 
+                padding: 6px 12px; 
+                font-weight: bold;
+                color: #374151;
+            }
+            QPushButton:hover { background-color: #f3f4f6; }
+            QPushButton:pressed { background-color: #e5e7eb; }
+            QPushButton:disabled { color: #9ca3af; background-color: #f9fafb; }
+            QTextEdit, QTableWidget { 
+                border: 1px solid #d1d5db; 
+                border-radius: 4px; 
+                background-color: #ffffff;
+                color: #000000;
+            }
+            QHeaderView::section {
+                background-color: #f3f4f6;
+                color: #000000;
+                font-weight: bold;
+                border: 1px solid #d1d5db;
+                border-top: none;
+                border-left: none;
+                padding: 4px;
+            }
+            QLabel { color: #1f2937; }
+        """)
+        
+        # Restore window state
+        geometry = self.settings.value("geometry")
+        if geometry:
+            self.restoreGeometry(geometry)
+        windowState = self.settings.value("windowState")
+        if windowState:
+            self.restoreState(windowState)
+            
         self.board_logic = Board()
         self.engine = None
         
@@ -72,14 +115,17 @@ class MainWindow(QMainWindow):
         extra_controls_layout = QHBoxLayout()
         self.btn_flip_board = QPushButton("Flip Board")
         self.btn_set_fen = QPushButton("Set FEN")
+        self.btn_copy_fen = QPushButton("Copy FEN")
         self.btn_edit_mode = QPushButton("Enter Edit Mode")
         
         self.btn_flip_board.clicked.connect(self.flip_board)
         self.btn_set_fen.clicked.connect(self.set_fen_dialog)
+        self.btn_copy_fen.clicked.connect(self.copy_fen)
         self.btn_edit_mode.clicked.connect(self.toggle_edit_mode)
         
         extra_controls_layout.addWidget(self.btn_flip_board)
         extra_controls_layout.addWidget(self.btn_set_fen)
+        extra_controls_layout.addWidget(self.btn_copy_fen)
         extra_controls_layout.addWidget(self.btn_edit_mode)
         
         # Edit Mode Panel (Hidden by default)
@@ -115,7 +161,11 @@ class MainWindow(QMainWindow):
         nav_layout.addWidget(self.btn_next)
         
         # Move History
-        self.move_list = QListWidget()
+        self.move_list = QTableWidget(0, 3)
+        self.move_list.setHorizontalHeaderLabels(["Turn", "Red", "Black"])
+        self.move_list.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.move_list.verticalHeader().setVisible(False)
+        self.move_list.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         
         # Engine Output
         self.engine_score_label = QLabel("Score: N/A")
@@ -132,7 +182,7 @@ class MainWindow(QMainWindow):
         right_layout.addLayout(extra_controls_layout)
         right_layout.addWidget(self.edit_panel)
         right_layout.addLayout(nav_layout)
-        right_layout.addWidget(QLabel("Move History:"))
+        right_layout.addWidget(QLabel("<b>Move History:</b>"))
         right_layout.addWidget(self.move_list)
         right_layout.addWidget(QLabel("Engine Analysis:"))
         right_layout.addWidget(self.engine_score_label)
@@ -146,6 +196,11 @@ class MainWindow(QMainWindow):
         
         main_layout.addWidget(splitter)
         
+        # Load last engine
+        last_engine = self.settings.value("last_engine_path")
+        if last_engine and os.path.exists(last_engine):
+            self.init_engine(last_engine)
+        
     def handle_user_move(self, uci_move):
         # We try to make the move
         success = self.board_logic.make_move_uci(uci_move)
@@ -158,25 +213,47 @@ class MainWindow(QMainWindow):
                 self.start_analysis_request()
                 
     def update_move_list(self):
-        self.move_list.clear()
+        self.move_list.setRowCount(0)
         moves = self.board_logic.move_history
         current_idx = self.board_logic.current_move_index
         
+        num_turns = (len(moves) + 1) // 2
+        self.move_list.setRowCount(num_turns)
+        
         for i in range(0, len(moves), 2):
-            move_num = (i // 2) + 1
+            turn_idx = i // 2
+            move_num = turn_idx + 1
             w_move_str = moves[i]['uci']
             b_move_str = moves[i+1]['uci'] if i+1 < len(moves) else ""
             
-            item = QListWidgetItem(f"{move_num}. {w_move_str} {b_move_str}")
+            item_num = QTableWidgetItem(str(move_num))
+            item_num.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            item_w = QTableWidgetItem(w_move_str)
+            item_w.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            item_b = QTableWidgetItem(b_move_str)
+            item_b.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            
+            # Non-editable
+            item_num.setFlags(item_num.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            item_w.setFlags(item_w.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            item_b.setFlags(item_b.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            
+            self.move_list.setItem(turn_idx, 0, item_num)
+            self.move_list.setItem(turn_idx, 1, item_w)
+            self.move_list.setItem(turn_idx, 2, item_b)
             
             # Highlighting the row containing the current move
             if i == current_idx or i + 1 == current_idx:
-                item.setBackground(QColor("#d1e7dd"))
+                for col, item in enumerate([item_num, item_w, item_b]):
+                    item.setBackground(QColor("#d1e7dd"))
+                    item.setForeground(QColor("#000000"))
             elif i > current_idx:
-                item.setForeground(QColor("gray"))
-                
-            self.move_list.addItem(item)
-            
+                for col, item in enumerate([item_num, item_w, item_b]):
+                    item.setForeground(QColor("gray"))
+            else:
+                for col, item in enumerate([item_num, item_w, item_b]):
+                    item.setForeground(QColor("#000000"))
+                    
         self.move_list.scrollToBottom()
             
     def prev_move(self):
@@ -207,6 +284,11 @@ class MainWindow(QMainWindow):
     def flip_board(self):
         self.board_widget.is_flipped = not getattr(self.board_widget, 'is_flipped', False)
         self.board_widget.update()
+        
+    def copy_fen(self):
+        fen = self.board_logic.get_fen()
+        QApplication.clipboard().setText(fen)
+        self.statusBar().showMessage("FEN copied to clipboard!", 2000)
         
     def set_fen_dialog(self):
         current_fen = self.board_logic.get_fen()
@@ -302,14 +384,18 @@ class MainWindow(QMainWindow):
     def load_engine(self):
         file_name, _ = QFileDialog.getOpenFileName(self, "Select Engine Executable", "", "Executables (*.exe);;All Files (*)")
         if file_name:
-            if self.engine:
-                self.engine.quit_engine()
-            self.engine = EngineClient(file_name)
-            self.engine.analysis_updated.connect(self.on_analysis_update)
-            self.engine.bestmove_found.connect(self.on_bestmove)
-            if self.engine.start_engine():
-                self.btn_start_analysis.setEnabled(True)
-                self.engine_log.append(f"Engine loaded: {file_name}")
+            self.init_engine(file_name)
+
+    def init_engine(self, file_name):
+        if self.engine:
+            self.engine.quit_engine()
+        self.engine = EngineClient(file_name)
+        self.engine.analysis_updated.connect(self.on_analysis_update)
+        self.engine.bestmove_found.connect(self.on_bestmove)
+        if self.engine.start_engine():
+            self.btn_start_analysis.setEnabled(True)
+            self.engine_log.append(f"Engine loaded: {file_name}")
+            self.settings.setValue("last_engine_path", file_name)
 
     def start_analysis_request(self):
         if self.engine:
@@ -392,6 +478,8 @@ class MainWindow(QMainWindow):
             self.start_analysis()
 
     def closeEvent(self, event):
+        self.settings.setValue("geometry", self.saveGeometry())
+        self.settings.setValue("windowState", self.saveState())
         if self.engine:
             self.engine.quit_engine()
         super().closeEvent(event)
